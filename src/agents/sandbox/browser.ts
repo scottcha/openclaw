@@ -9,6 +9,7 @@ import {
   normalizeOptionalString,
 } from "@openclaw/normalization-core/string-coerce";
 import { deriveDefaultBrowserCdpPortRange } from "../../config/port-defaults.js";
+import { isContainerEnvironment } from "../../infra/container-environment.js";
 import { isSameSsrFPolicy, type SsrFPolicy } from "../../infra/net/ssrf.js";
 import { startBrowserBridgeServer } from "../../plugin-sdk/browser-bridge.js";
 import {
@@ -41,6 +42,7 @@ import {
   formatDockerDaemonUnavailableError,
   isDockerDaemonUnavailable,
   readDockerContainerEnvVar,
+  readDockerContainerIp,
   readDockerContainerLabel,
   readDockerPort,
   resolveDockerEnvPolicyEpoch,
@@ -79,20 +81,25 @@ function buildSandboxCdpAuthHeader(token: string): string {
   return `Basic ${Buffer.from(`openclaw:${token}`).toString("base64")}`;
 }
 
-function buildSandboxCdpUrl(params: { cdpPort: number; authToken: string }): string {
-  const url = new URL(`http://127.0.0.1:${params.cdpPort}`);
+function buildSandboxCdpUrl(params: {
+  cdpHost?: string;
+  cdpPort: number;
+  authToken: string;
+}): string {
+  const url = new URL(`http://${params.cdpHost ?? "127.0.0.1"}:${params.cdpPort}`);
   url.username = "openclaw";
   url.password = params.authToken;
   return url.toString().replace(/\/$/, "");
 }
 
 async function waitForSandboxCdp(params: {
+  cdpHost?: string;
   cdpPort: number;
   authToken: string;
   timeoutMs: number;
 }): Promise<boolean> {
   const deadline = Date.now() + Math.max(0, params.timeoutMs);
-  const url = `http://127.0.0.1:${params.cdpPort}/json/version`;
+  const url = `http://${params.cdpHost ?? "127.0.0.1"}:${params.cdpPort}/json/version`;
   while (Date.now() < deadline) {
     try {
       // Keep a stalled request inside the outer browser startup deadline.
@@ -127,13 +134,29 @@ async function waitForSandboxCdp(params: {
 
 function buildSandboxBrowserResolvedConfig(params: {
   controlPort: number;
+  cdpHost?: string;
   cdpPort: number;
   cdpAuthToken: string;
   headless: boolean;
   evaluateEnabled: boolean;
   ssrfPolicy?: SsrFPolicy;
 }): ResolvedBrowserConfig {
-  const cdpHost = "127.0.0.1";
+  // Loopback only holds when the Gateway shares a network namespace with the
+  // published port. A containerized Gateway reaches the browser container by IP.
+  const cdpHost = params.cdpHost ?? "127.0.0.1";
+  // The loopback CDP control plane is exempt from private-network SSRF checks
+  // (cdp.helpers.ts pins it explicitly). A container-addressed control plane
+  // needs the same exemption, scoped to this one address: pin the exact IP we
+  // resolved from the container we created, additively, so every other host
+  // keeps the caller's private-network protection. Page navigation is
+  // unaffected — allowedHostnames only skips private checks for listed hosts.
+  const cdpSsrfPolicy =
+    params.ssrfPolicy && cdpHost !== "127.0.0.1"
+      ? {
+          ...params.ssrfPolicy,
+          allowedHostnames: [...(params.ssrfPolicy.allowedHostnames ?? []), cdpHost],
+        }
+      : params.ssrfPolicy;
   const cdpPortRange = deriveDefaultBrowserCdpPortRange(params.controlPort);
   return {
     enabled: true,
@@ -166,13 +189,14 @@ function buildSandboxBrowserResolvedConfig(params: {
       [DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME]: {
         cdpPort: params.cdpPort,
         cdpUrl: buildSandboxCdpUrl({
+          cdpHost,
           cdpPort: params.cdpPort,
           authToken: params.cdpAuthToken,
         }),
         color: DEFAULT_OPENCLAW_BROWSER_COLOR,
       },
     },
-    ssrfPolicy: params.ssrfPolicy,
+    ssrfPolicy: cdpSsrfPolicy,
   };
 }
 
@@ -454,14 +478,24 @@ async function ensureSandboxBrowserContainer(
     await execDocker(["start", containerName]);
   }
 
-  const mappedCdp = await readDockerPort(containerName, params.cfg.browser.cdpPort);
+  // Published ports bind the host's loopback. When the Gateway is itself a
+  // container that path is unreachable (its 127.0.0.1 is its own namespace), so
+  // address the browser container directly on the shared browser network and
+  // use the in-container CDP port rather than the host-mapped one.
+  const siblingIp = isContainerEnvironment()
+    ? await readDockerContainerIp(containerName, params.cfg.browser.network)
+    : null;
+  const mappedCdp = siblingIp
+    ? params.cfg.browser.cdpPort
+    : await readDockerPort(containerName, params.cfg.browser.cdpPort);
   if (!mappedCdp) {
     throw new Error(`Failed to resolve CDP port mapping for ${containerName}.`);
   }
   if (!cdpAuthToken) {
     throw new Error(`Failed to resolve CDP relay auth for ${containerName}.`);
   }
-  const cdpUrl = buildSandboxCdpUrl({ cdpPort: mappedCdp, authToken: cdpAuthToken });
+  const cdpHost = siblingIp ?? "127.0.0.1";
+  const cdpUrl = buildSandboxCdpUrl({ cdpHost, cdpPort: mappedCdp, authToken: cdpAuthToken });
 
   const mappedNoVnc = noVncEnabled
     ? await readDockerPort(containerName, params.cfg.browser.noVncPort)
@@ -521,6 +555,7 @@ async function ensureSandboxBrowserContainer(
             await execDocker(["start", containerName]);
           }
           const ok = await waitForSandboxCdp({
+            cdpHost,
             cdpPort: mappedCdp,
             authToken: cdpAuthToken,
             timeoutMs: params.cfg.browser.autoStartTimeoutMs,
@@ -528,7 +563,7 @@ async function ensureSandboxBrowserContainer(
           if (!ok) {
             await execDocker(["rm", "-f", containerName], { allowFailure: true });
             throw new Error(
-              `Sandbox browser CDP did not become reachable on 127.0.0.1:${mappedCdp} within ${params.cfg.browser.autoStartTimeoutMs}ms. The hung container has been forcefully removed.`,
+              `Sandbox browser CDP did not become reachable on ${cdpHost}:${mappedCdp} within ${params.cfg.browser.autoStartTimeoutMs}ms. The hung container has been forcefully removed.`,
             );
           }
         }
@@ -537,6 +572,7 @@ async function ensureSandboxBrowserContainer(
     return await startBrowserBridgeServer({
       resolved: buildSandboxBrowserResolvedConfig({
         controlPort: 0,
+        cdpHost,
         cdpPort: mappedCdp,
         cdpAuthToken,
         headless: params.cfg.browser.headless,

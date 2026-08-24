@@ -136,6 +136,29 @@ export async function readDockerContainerEnvVar(
   return null;
 }
 
+/**
+ * Container-scoped address for a sibling container, used when this process is
+ * itself containerized. Published ports bind the *host* namespace, so a
+ * loopback-published port is unreachable from here; the sibling's network IP is
+ * the only path that works without exposing the port beyond the host.
+ */
+export async function readDockerContainerIp(
+  containerName: string,
+  network?: string,
+): Promise<string | null> {
+  const format = network
+    ? `{{with index .NetworkSettings.Networks "${network}"}}{{.IPAddress}}{{end}}`
+    : "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}";
+  const result = await execDocker(["inspect", "-f", format, containerName], {
+    allowFailure: true,
+  });
+  if (result.code !== 0) {
+    return null;
+  }
+  const ip = result.stdout.trim().split(/\s+/).filter(Boolean)[0] ?? "";
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) ? ip : null;
+}
+
 export async function readDockerPort(containerName: string, port: number) {
   const result = await execDocker(["port", containerName, `${port}/tcp`], {
     allowFailure: true,
