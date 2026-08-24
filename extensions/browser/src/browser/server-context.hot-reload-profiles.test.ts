@@ -624,4 +624,32 @@ describe("server-context hot-reload profiles", () => {
       enqueueCurrentProfileStart(state, runtime, async () => {}),
     ).resolves.toBeUndefined();
   });
+
+  it("keeps a live extension relay across a disk refresh that changes nothing", () => {
+    const { state, runtime } = createProfileFixture({
+      name: "ext",
+      config: { driver: "extension", cdpPort: 18799 },
+    });
+    // Mirror applyInternalRelayToken: a running relay mints a process-only
+    // credential that resolveProfile embeds in the extension profile's cdpUrl.
+    state.resolved = {
+      ...state.resolved,
+      extensionRelayInternalTokens: { ext: "internal-token" },
+    };
+    Object.assign(
+      runtime.profile,
+      requireValue(resolveProfile(state.resolved, "ext"), "ext profile missing"),
+    );
+    expect(runtime.profile.cdpUrl).toContain("internal-token");
+
+    mockState.cachedConfig = null;
+    refreshProfiles(state);
+
+    // A refresh that resolves identical on-disk config must not look like a
+    // changed invariant: that transition carries closeRelay for extension
+    // profiles, which would drop the paired extension's live socket.
+    expect(state.resolved.extensionRelayInternalTokens.ext).toBe("internal-token");
+    expect(runtime.profile.cdpUrl).toContain("internal-token");
+    expect(getProfileLifecycle(runtime).transitionReason ?? "").not.toContain("cdpUrl");
+  });
 });

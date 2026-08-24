@@ -92,13 +92,21 @@ function applyResolvedConfig(
   current: BrowserServerState,
   freshResolved: BrowserServerState["resolved"],
 ) {
-  current.resolved = {
+  // Process-only relay credentials are runtime state, not disk config: a fresh
+  // resolve zeroes them, which rewrites every extension profile's cdpUrl (the
+  // internal token is embedded in it). That reads as a changed invariant and
+  // tears down the live relay, closing the paired extension's socket — which
+  // reconnects, mints a new token, and repeats. Carry them across the refresh.
+  const merged = {
     ...freshResolved,
     // Keep the runtime evaluate gate stable across request-time profile refreshes.
     // Security-sensitive behavior should only change via full runtime config reload,
     // not as a side effect of resolving profiles/tabs during a request.
     evaluateEnabled: current.resolved.evaluateEnabled,
+    extensionRelayToken: current.resolved.extensionRelayToken,
+    extensionRelayInternalTokens: current.resolved.extensionRelayInternalTokens,
   };
+  current.resolved = merged;
   for (const [name, runtime] of current.profiles) {
     const actor = getProfileLifecycle(runtime);
     if (actor.terminal === "config-removed") {
@@ -108,7 +116,7 @@ function applyResolvedConfig(
     if (actor.terminal) {
       continue;
     }
-    const nextProfile = resolveProfile(freshResolved, name);
+    const nextProfile = resolveProfile(merged, name);
     if (nextProfile) {
       if (actor.blockedReason && !actor.transitionReason) {
         void beginProfileTransition({
