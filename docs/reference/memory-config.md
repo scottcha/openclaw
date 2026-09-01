@@ -422,6 +422,39 @@ Paths can be absolute or workspace-relative. Directories are scanned recursively
 files. Object entries narrow a directory with a root-relative glob using `/` separators; direct
 file entries are indexed exactly. The builtin engine skips symlinks.
 
+### Excluding paths
+
+| Key            | Type       | Description                                     |
+| -------------- | ---------- | ----------------------------------------------- |
+| `excludePaths` | `string[]` | Workspace-relative paths removed from the index |
+
+```json5
+{
+  memory: {
+    search: {
+      excludePaths: ["memory/dreaming", "memory/run-artifacts/**"],
+    },
+  },
+}
+```
+
+Exclusions apply after the default memory roots and `extraPaths` are collected, so they can drop
+root files, anything under `memory/`, and `extraPaths` entries alike. A literal entry removes that
+exact file, or — when it names a directory — that directory and everything beneath it, so
+`memory/dreaming` and `memory/dreaming/**` behave the same. Entries containing `*` are matched as
+globs with `/` separators, using the same matcher as `extraPaths` patterns.
+
+Use this when generated or derivative files would otherwise crowd out the canonical notes they were
+distilled from. Distillations embed similarly to everything, so they surface broadly and can
+displace their own sources. Excluded files are never embedded, which also shortens reindex time and
+reduces embedding spend.
+
+Changing `excludePaths` changes which files are eligible, so reindex afterwards:
+
+```bash
+openclaw memory status --index --agent main
+```
+
 ---
 
 ## Multimodal memory (Gemini)
