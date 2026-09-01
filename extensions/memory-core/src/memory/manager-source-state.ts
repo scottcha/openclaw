@@ -36,13 +36,14 @@ type MemorySourceInspection = {
 /** Resolve exactly the entries eligible for indexing, including validated multimodal files. */
 export async function resolveMemorySourceFileEntries(params: {
   workspaceDir: string;
-  settings: Pick<ResolvedMemorySearchConfig, "extraPaths" | "multimodal">;
+  settings: Pick<ResolvedMemorySearchConfig, "extraPaths" | "excludePaths" | "multimodal">;
   concurrency: number;
 }): Promise<MemoryFileEntry[]> {
   const files = await listMemoryFiles(
     params.workspaceDir,
     params.settings.extraPaths,
     params.settings.multimodal,
+    params.settings.excludePaths,
   );
   return (
     await runWithConcurrency(
@@ -70,7 +71,7 @@ function hasMemorySourceDrift(params: {
 export async function inspectMemorySourceState(params: {
   db: MemorySourceStateDb;
   workspaceDir: string;
-  settings: Pick<ResolvedMemorySearchConfig, "extraPaths" | "multimodal">;
+  settings: Pick<ResolvedMemorySearchConfig, "extraPaths" | "excludePaths" | "multimodal">;
   concurrency: number;
 }): Promise<MemorySourceInspection> {
   const entries = await resolveMemorySourceFileEntries(params);

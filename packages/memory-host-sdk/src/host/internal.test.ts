@@ -193,6 +193,55 @@ describe("memory host SDK package internals", () => {
     ]);
   });
 
+  it("excludes configured paths from the memory index", async () => {
+    const tmpDir = getTmpDir();
+    fsSync.writeFileSync(path.join(tmpDir, "MEMORY.md"), "# Default memory");
+    fsSync.writeFileSync(path.join(tmpDir, "USER.md"), "# User profile");
+    const memoryDir = path.join(tmpDir, "memory");
+    const dreamingDir = path.join(memoryDir, "dreaming", "light");
+    fsSync.mkdirSync(dreamingDir, { recursive: true });
+    fsSync.writeFileSync(path.join(memoryDir, "note.md"), "# Curated note");
+    fsSync.writeFileSync(path.join(dreamingDir, "2026-01-01.md"), "# Derivative report");
+
+    const rel = (files: string[]) =>
+      files.map((file) => path.relative(tmpDir, file).replaceAll(path.sep, "/")).toSorted();
+
+    // Without excludePaths the derivative file is indexed alongside curated notes.
+    expect(rel(await listMemoryFiles(tmpDir))).toEqual([
+      "MEMORY.md",
+      "USER.md",
+      "memory/dreaming/light/2026-01-01.md",
+      "memory/note.md",
+    ]);
+
+    // A literal directory entry drops that whole subtree.
+    expect(rel(await listMemoryFiles(tmpDir, undefined, undefined, ["memory/dreaming"]))).toEqual([
+      "MEMORY.md",
+      "USER.md",
+      "memory/note.md",
+    ]);
+
+    // The equivalent glob form behaves identically.
+    expect(
+      rel(await listMemoryFiles(tmpDir, undefined, undefined, ["memory/dreaming/**"])),
+    ).toEqual(["MEMORY.md", "USER.md", "memory/note.md"]);
+
+    // Root-level files are excludable too.
+    expect(rel(await listMemoryFiles(tmpDir, undefined, undefined, ["USER.md"]))).toEqual([
+      "MEMORY.md",
+      "memory/dreaming/light/2026-01-01.md",
+      "memory/note.md",
+    ]);
+
+    // Blank entries are ignored rather than excluding everything.
+    expect(rel(await listMemoryFiles(tmpDir, undefined, undefined, ["", "   "]))).toEqual([
+      "MEMORY.md",
+      "USER.md",
+      "memory/dreaming/light/2026-01-01.md",
+      "memory/note.md",
+    ]);
+  });
+
   it("lists canonical markdown and enabled multimodal files", async () => {
     const tmpDir = getTmpDir();
     fsSync.writeFileSync(path.join(tmpDir, "MEMORY.md"), "# Default memory");

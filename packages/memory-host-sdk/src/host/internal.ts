@@ -125,6 +125,48 @@ export function normalizeExtraMemoryPaths(
   );
 }
 
+/**
+ * Builds a predicate reporting whether a path is excluded from the memory index
+ * by the configured `memory.search.excludePaths` entries.
+ *
+ * Entries are workspace-relative. A literal entry matches that exact file and,
+ * when it names a directory, everything beneath it — so `memory/dreaming` and
+ * `memory/dreaming/**` behave identically. Entries containing `*` are matched
+ * with POSIX glob semantics, the same matcher `extraPaths` patterns use.
+ */
+function createMemoryExcludeMatcher(
+  workspaceDir: string,
+  excludePaths?: string[],
+): (absPath: string) => boolean {
+  const patterns = (excludePaths ?? [])
+    .map((entry) => entry.trim().replaceAll("\\", "/").replace(/\/+$/u, ""))
+    .filter((entry) => entry.length > 0);
+  if (patterns.length === 0) {
+    return () => false;
+  }
+  return (absPath: string): boolean => {
+    const relativePath = path.relative(workspaceDir, absPath).replaceAll(path.sep, "/");
+    if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+      return false;
+    }
+    return patterns.some((pattern) => {
+      // Literal entries are resolved without the glob matcher so a malformed
+      // wildcard elsewhere can never silently disable a directory exclusion.
+      if (relativePath === pattern || relativePath.startsWith(`${pattern}/`)) {
+        return true;
+      }
+      if (!pattern.includes("*")) {
+        return false;
+      }
+      try {
+        return path.posix.matchesGlob(relativePath, pattern);
+      } catch {
+        return false;
+      }
+    });
+  };
+}
+
 export function matchesExtraMemoryPathEntry(
   entry: NormalizedExtraMemoryPath,
   candidatePath: string,
@@ -207,14 +249,19 @@ export async function listMemoryFiles(
   workspaceDir: string,
   extraPaths?: MemoryExtraPath[],
   multimodal?: MemoryMultimodalSettings,
+  excludePaths?: string[],
 ): Promise<string[]> {
   const result: string[] = [];
   const memoryDir = path.join(workspaceDir, "memory");
 
+  const isExcludedPath = createMemoryExcludeMatcher(workspaceDir, excludePaths);
   const shouldSkipWorkspaceMemoryPath = (absPath: string): boolean =>
-    shouldSkipRootMemoryAuxiliaryPath({ workspaceDir, absPath });
+    shouldSkipRootMemoryAuxiliaryPath({ workspaceDir, absPath }) || isExcludedPath(absPath);
 
   const addMarkdownFile = async (absPath: string) => {
+    if (isExcludedPath(absPath)) {
+      return;
+    }
     try {
       const stat = await statRegularFile(absPath);
       if (stat.missing) {

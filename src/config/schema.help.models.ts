@@ -204,6 +204,8 @@ export const MODEL_FIELD_HELP: Record<string, string> = {
     "Sets the extra memory directory or file. Relative paths resolve from the agent workspace; direct file entries are indexed exactly.",
   "memory.search.extraPaths.*.pattern":
     'Limits a directory entry to supported files matching this root-relative glob, for example "runbooks/**/*.md". Omit it to scan all supported files recursively.',
+  "memory.search.excludePaths":
+    'Removes workspace-relative paths from the memory index, applied after default memory files and extraPaths are collected. A literal entry excludes that file, or that directory and everything under it; entries containing "*" are matched as globs, for example "memory/dreaming/**". Use this when derivative or generated files (dream reports, run artifacts) would otherwise outrank the canonical notes they were distilled from.',
   "memory.search.multimodal":
     'Optional multimodal memory settings for indexing image and audio files from configured extra paths. Keep this off unless your embedding model explicitly supports cross-modal embeddings, and set `memory.search.fallback` to "none" while it is enabled. Matching files are uploaded to the configured remote embedding provider during indexing.',
   "memory.search.multimodal.enabled":

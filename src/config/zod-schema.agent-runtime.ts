@@ -777,6 +777,7 @@ export const MemorySearchSchema = z
         ]),
       )
       .optional(),
+    excludePaths: z.array(z.string()).optional(),
     multimodal: z
       .object({
         enabled: z.boolean().optional(),

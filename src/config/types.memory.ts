@@ -26,6 +26,8 @@ export type MemorySearchConfig = {
   sources?: Array<"memory" | "sessions">;
   /** Extra paths to include in memory search, optionally filtered by a glob. */
   extraPaths?: MemoryExtraPath[];
+  /** Workspace-relative paths removed from the index; literal entries drop a whole subtree. */
+  excludePaths?: string[];
   /** Optional multimodal file indexing for selected extra paths. */
   multimodal?: {
     /** Enable image/audio embeddings from extraPaths. */

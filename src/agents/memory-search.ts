@@ -33,6 +33,8 @@ export type ResolvedMemorySearchConfig = {
   /** Sources searched when memory_search omits an explicit corpus. */
   searchSources: Array<"memory" | "sessions">;
   extraPaths: MemoryExtraPath[];
+  /** Workspace-relative paths removed from the index after collection. */
+  excludePaths: string[];
   multimodal: MemoryMultimodalSettings;
   provider: string;
   remote?: {
@@ -274,6 +276,13 @@ function mergeConfig(
     ...(defaults?.extraPaths ?? []),
     ...(overrides?.extraPaths ?? []),
   ]);
+  const excludePaths = Array.from(
+    new Set(
+      [...(defaults?.excludePaths ?? []), ...(overrides?.excludePaths ?? [])]
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  );
   const multimodal = normalizeMemoryMultimodalSettings({
     enabled: overrides?.multimodal?.enabled ?? defaults?.multimodal?.enabled,
     modalities: overrides?.multimodal?.modalities ?? defaults?.multimodal?.modalities,
@@ -346,6 +355,7 @@ function mergeConfig(
     sources,
     searchSources,
     extraPaths,
+    excludePaths,
     multimodal,
     provider,
     remote,
