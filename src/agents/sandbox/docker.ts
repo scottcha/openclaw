@@ -155,7 +155,7 @@ export async function readDockerContainerIp(
   if (result.code !== 0) {
     return null;
   }
-  const ip = result.stdout.trim().split(/\s+/).filter(Boolean)[0] ?? "";
+  const ip = result.stdout.trim().split(/\s+/).find(Boolean) ?? "";
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) ? ip : null;
 }
 
