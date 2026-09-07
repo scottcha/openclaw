@@ -3,6 +3,21 @@ import { describe, expect, it } from "vitest";
 import { validateConfigObject } from "./validation.js";
 
 describe("config schema regressions", () => {
+  it("accepts the remote CDP timeout overrides for relayed browsers", () => {
+    // Regression: these were added to the resolver and its types but not to the
+    // zod schema, so resolveBrowserConfig honoured them in unit tests while the
+    // real config path rejected them with "Unrecognized key".
+    const result = validateConfigObject({
+      browser: { remoteCdpTimeoutMs: 8_000, remoteCdpHandshakeTimeoutMs: 15_000 },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.config.browser?.remoteCdpTimeoutMs).toBe(8_000);
+      expect(result.config.browser?.remoteCdpHandshakeTimeoutMs).toBe(15_000);
+    }
+  });
+
   it.each([true, false])("accepts and preserves gateway.cliAgents.enabled=%s", (enabled) => {
     const result = validateConfigObject({ gateway: { cliAgents: { enabled } } });
 

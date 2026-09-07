@@ -149,6 +149,8 @@ export const OpenClawSchemaShape = {
       enabled: z.boolean().optional(),
       allowSystemProfileImport: z.boolean().optional(),
       evaluateEnabled: z.boolean().optional(),
+      remoteCdpTimeoutMs: z.number().int().positive().optional(),
+      remoteCdpHandshakeTimeoutMs: z.number().int().positive().optional(),
       cdpUrl: z.string().optional(),
       executablePath: z.string().optional(),
       headless: z.boolean().optional(),
