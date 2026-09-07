@@ -46,6 +46,10 @@ export type BrowserConfig = {
   allowSystemProfileImport?: boolean;
   /** If false, disable browser act:evaluate (arbitrary JS). Default: true */
   evaluateEnabled?: boolean;
+  /** Request timeout for a remote CDP endpoint, in ms. Default: 1500. Raise it for relayed or tunnelled browsers. */
+  remoteCdpTimeoutMs?: number;
+  /** Handshake/enumeration timeout for a remote CDP endpoint, in ms. Default: 3000. Raise it for relayed or tunnelled browsers. */
+  remoteCdpHandshakeTimeoutMs?: number;
   /** Base URL of the CDP endpoint (for remote browsers). Default: loopback CDP on the derived port. */
   cdpUrl?: string;
   /** Override the browser executable path (all platforms). */

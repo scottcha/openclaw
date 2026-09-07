@@ -204,6 +204,10 @@ export const MODEL_FIELD_HELP: Record<string, string> = {
     "Sets the extra memory directory or file. Relative paths resolve from the agent workspace; direct file entries are indexed exactly.",
   "memory.search.extraPaths.*.pattern":
     'Limits a directory entry to supported files matching this root-relative glob, for example "runbooks/**/*.md". Omit it to scan all supported files recursively.',
+  "browser.remoteCdpTimeoutMs":
+    "Request timeout in milliseconds for a remote CDP endpoint (default: 1500). The default suits a loopback endpoint; raise it for a browser reached over a relay or SSH tunnel, where round trips are far slower.",
+  "browser.remoteCdpHandshakeTimeoutMs":
+    "Handshake timeout in milliseconds for a remote CDP endpoint (default: 3000). Tab enumeration uses the larger of this and browser.remoteCdpTimeoutMs, so raise it when listing tabs times out on a relayed browser.",
   "memory.search.excludePaths":
     'Removes workspace-relative paths from the memory index, applied after default memory files and extraPaths are collected. A literal entry excludes that file, or that directory and everything under it; entries containing "*" are matched as globs, for example "memory/dreaming/**". Use this when derivative or generated files (dream reports, run artifacts) would otherwise outrank the canonical notes they were distilled from.',
   "memory.search.multimodal":

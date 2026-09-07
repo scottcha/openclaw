@@ -380,8 +380,11 @@ export function resolveBrowserConfig(
   const evaluateEnabled = cfg?.evaluateEnabled ?? DEFAULT_BROWSER_EVALUATE_ENABLED;
   const gatewayPort = resolveGatewayPort(rootConfig);
   const controlPort = deriveDefaultBrowserControlPort(gatewayPort ?? DEFAULT_BROWSER_CONTROL_PORT);
-  const remoteCdpTimeoutMs = DEFAULT_BROWSER_REMOTE_CDP_TIMEOUT_MS;
-  const remoteCdpHandshakeTimeoutMs = DEFAULT_BROWSER_REMOTE_CDP_HANDSHAKE_TIMEOUT_MS;
+  // Defaults suit a loopback CDP endpoint. A relayed browser (extension driver
+  // over a tunnel) needs more, so both are operator-overridable.
+  const remoteCdpTimeoutMs = cfg?.remoteCdpTimeoutMs ?? DEFAULT_BROWSER_REMOTE_CDP_TIMEOUT_MS;
+  const remoteCdpHandshakeTimeoutMs =
+    cfg?.remoteCdpHandshakeTimeoutMs ?? DEFAULT_BROWSER_REMOTE_CDP_HANDSHAKE_TIMEOUT_MS;
   const localLaunchTimeoutMs = DEFAULT_BROWSER_LOCAL_LAUNCH_TIMEOUT_MS;
   const localCdpReadyTimeoutMs = DEFAULT_BROWSER_LOCAL_CDP_READY_TIMEOUT_MS;
   const actionTimeoutMs = DEFAULT_BROWSER_ACTION_TIMEOUT_MS;

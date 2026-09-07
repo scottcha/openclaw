@@ -82,6 +82,22 @@ function withProfile(
 }
 
 describe("browser config", () => {
+  it("lets an operator raise the remote CDP timeouts for relayed browsers", () => {
+    // Regression: the defaults assume a loopback CDP endpoint. A browser reached
+    // over a relay runs an order of magnitude slower, and tab enumeration uses
+    // max(request, handshake), so it timed out with no way to raise the ceiling.
+    const defaults = resolveBrowserConfig(undefined);
+    expect(defaults.remoteCdpTimeoutMs).toBe(1_500);
+    expect(defaults.remoteCdpHandshakeTimeoutMs).toBe(3_000);
+
+    const tuned = resolveBrowserConfig({
+      remoteCdpTimeoutMs: 8_000,
+      remoteCdpHandshakeTimeoutMs: 15_000,
+    });
+    expect(tuned.remoteCdpTimeoutMs).toBe(8_000);
+    expect(tuned.remoteCdpHandshakeTimeoutMs).toBe(15_000);
+  });
+
   it("defaults to enabled with loopback defaults and lobster-orange color", () => {
     const resolved = resolveBrowserConfig(undefined);
     expect(resolved.enabled).toBe(true);
